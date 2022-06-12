@@ -36,9 +36,6 @@ namespace TH13 {
             GetJsonValue(section);
             GetJsonValue(phase);
 
-            GetJson uint64_t hash[2];
-                CalcFileHash("vpatch_th13.dll", hash);
-                if (hash[0] != 6450385832836080372ll || hash[1] != 579365625616419970ll)Value(score);
             GetJsonValue(life);
             GetJsonValue(extend);
             GetJsonValue(life_fragment);

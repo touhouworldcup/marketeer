@@ -3,7 +3,6 @@
 #include "thprac_launcher_main.h"
 #include "thprac_launcher_cfg.h"
 #include <metrohash128.h>
-#include <xxh3.h>
 #include "thprac_data_anly.h"
 #include "thprac_replay_db.h"
 #include "thprac_config_db.h"

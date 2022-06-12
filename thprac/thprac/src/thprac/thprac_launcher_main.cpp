@@ -64,7 +64,6 @@ int GuiLauncherMain()
         ErrorMsgBox(THPRAC_PR_ERR_LAUNCHER_CFG);
         return -1;
     }
-    LauncherPeekUpd();
     auto scale = LauncherWndGetScale();
 
     while (LauncherWndNewFrame()) {
@@ -86,10 +85,7 @@ int GuiLauncherMain()
         if (mktIsStreaming) {
             wndTitleText += " // Streaming";
         }
-        if (LauncherIsChkingUpd()) {
-            wndTitleText += " // Checking for updates...";
-        }
-        wndTitleText = LauncherIsChkingUpd() ? XSTR(THPRAC_LAUNCHER_CHECKING_UPDATE) : XSTR(THPRAC_LAUNCHER);
+        wndTitleText = XSTR(THPRAC_LAUNCHER);
         wndTitleText += "###thprac_wnd";
         ImGui::Begin(wndTitleText.c_str(), &isOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove, &isMinimize);
         if (mktIsStreaming) {
@@ -131,7 +127,6 @@ int GuiLauncherMain()
             }
             if (GuiTabItem(XSTR(THPRAC_SETTINGS))) {
                 ImGui::BeginChild("##settings");
-                LauncherCfgGuiUpd();
                 ImGui::EndChild();
                 ImGui::EndTabItem();
             }
@@ -140,8 +135,6 @@ int GuiLauncherMain()
 
             ImGui::EndTabBar();
         }
-
-        LauncherChkUpdPopup();
 
         ImVec2 wndPos = ImGui::GetWindowPos();
         ImVec2 wndSize = ImGui::GetWindowSize();

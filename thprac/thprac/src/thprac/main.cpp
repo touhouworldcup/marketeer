@@ -47,8 +47,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     int launchBehavior = 0;
     bool dontFindOngoingGame = false;
     bool adminRights = false;
-    int checkUpdateWhen = 0;
-    bool autoUpdate = false;
     if (LauncherCfgInit(true)) {
         if (!Gui::LocaleInitFromCfg()) {
             Gui::LocaleAutoSet();
@@ -56,8 +54,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         LauncherSettingGet("existing_game_launch_action", launchBehavior);
         LauncherSettingGet("dont_search_ongoing_game", dontFindOngoingGame);
         LauncherSettingGet("thprac_admin_rights", adminRights);
-        LauncherSettingGet("check_update_timing", checkUpdateWhen);
-        LauncherSettingGet("update_without_confirmation", autoUpdate);
         LauncherCfgClose();
     }
 
@@ -69,24 +65,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         return 0;
     }
 
-    if (checkUpdateWhen == 1) {
-        if (LauncherUpdDialog(autoUpdate)) {
-            return 0;
-        }
-    }
-
     if (!dontFindOngoingGame && FindOngoingGame()) {
         return 0;
     }
 
     if (launchBehavior != 1 && FindAndRunGame(launchBehavior == 2)) {
         return 0;
-    }
-
-    if (checkUpdateWhen == 0 && autoUpdate) {
-        if (LauncherUpdDialog(autoUpdate)) {
-            return 0;
-        }
     }
 
     return GuiLauncherMain();
