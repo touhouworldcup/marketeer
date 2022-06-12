@@ -120,7 +120,6 @@ void CenteredText(const char* text, float wndX);
 float GetRelWidth(float rel);
 float GetRelHeight(float rel);
 void CalcFileHash(const char* file_name, uint64_t hash[2]);
-uint64_t CalcFileXXHash(const char* file_name);
 void HelpMarker(const char* desc);
 template <th_glossary_t name>
 static bool BeginOptGroup()
