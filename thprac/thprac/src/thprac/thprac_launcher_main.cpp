@@ -2,8 +2,6 @@
 #include "thprac_gui_locale.h"
 #include "thprac_launcher_cfg.h"
 #include "thprac_launcher_games.h"
-#include "thprac_launcher_links.h"
-#include "thprac_launcher_tools.h"
 #include "thprac_launcher_mkt.h"
 #include "thprac_launcher_utils.h"
 #include "thprac_launcher_wnd.h"
@@ -107,18 +105,6 @@ int GuiLauncherMain()
                 ImGui::EndChild();
                 ImGui::EndTabItem();
             }
-            if (GuiTabItem(XSTR(THPRAC_LINKS))) {
-                ImGui::BeginChild("##links");
-                LauncherLinksGuiUpd();
-                ImGui::EndChild();
-                ImGui::EndTabItem();
-            }
-            if (GuiTabItem(XSTR(THPRAC_TOOLS))) {
-                ImGui::BeginChild("##tools");
-                LauncherToolsGuiUpd();
-                ImGui::EndChild();
-                ImGui::EndTabItem();
-            }
             if (GuiTabItem("Marketeer (ALPHA)")) {
                 ImGui::BeginChild("##marketeer");
                 LauncherMktGuiUpd();
@@ -127,11 +113,10 @@ int GuiLauncherMain()
             }
             if (GuiTabItem(XSTR(THPRAC_SETTINGS))) {
                 ImGui::BeginChild("##settings");
+                LauncherCfgGuiUpd();
                 ImGui::EndChild();
                 ImGui::EndTabItem();
             }
-
-            //localeSwitch = DebugTabBar();
 
             ImGui::EndTabBar();
         }

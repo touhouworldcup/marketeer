@@ -46,13 +46,13 @@ void LauncherAquireDataDirVar()
     GetModuleFileNameW((HMODULE)&__ImageBase, pathBuffer, MAX_PATH);
     path = GetDirFromFullPath(std::wstring(pathBuffer));
 
-    auto backupPath = path + L".thprac_data_backup";
+    auto backupPath = path + L".marketeer_data_backup";
     auto backupPathAttr = GetFileAttributesW(backupPath.c_str());
     if (backupPathAttr != INVALID_FILE_ATTRIBUTES && backupPathAttr & FILE_ATTRIBUTE_DIRECTORY) {
         gCfgLocalBackupAvaliable = true;
     }
 
-    path += L".thprac_data";
+    path += L".marketeer_data";
     auto fileAttr = GetFileAttributesW(path.c_str());
     if (fileAttr != INVALID_FILE_ATTRIBUTES && fileAttr & FILE_ATTRIBUTE_DIRECTORY) {
         gCfgIsLocalDir = 1;
@@ -336,32 +336,6 @@ protected:
     std::string value;
 };
 
-class THCfgCheckboxEx : public THSetting<bool> {
-public:
-    THCfgCheckboxEx(const char* _name, bool _value)
-        : THSetting(_name, _value)
-    {
-    }
-    bool Gui(const char* guiTxt, const char* helpTxt = nullptr)
-    {
-        bool result = false;
-        if (ImGui::Checkbox(guiTxt, &value)) {
-            value = !value;
-            result = true;
-        }
-        if (helpTxt) {
-            ImGui::SameLine();
-            GuiHelpMarker(helpTxt);
-        }
-        return result;
-    }
-    void Toggle()
-    {
-        value = !value;
-        LauncherSettingSet(name.c_str(), value);
-    }
-};
-
 class THCfgCheckbox : public THSetting<bool> {
 public:
     THCfgCheckbox(const char* _name, bool _value)
@@ -429,9 +403,6 @@ private:
     {
         mGuiUpdFunc = [&]() { GuiMain(); };
         CfgInit();
-        for (auto& game : gGameRoll) {
-            mThcrapGames[game.type].push_back(game);
-        }
     }
     SINGLETON(THCfgGui);
 
@@ -459,8 +430,8 @@ public:
             wchar_t appDataPath[MAX_PATH];
             if (SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appDataPath) == S_OK) {
                 std::wstring jsonPath = appDataPath;
-                jsonPath += L"\\thprac";
-                jsonPath += L"\\thprac.json";
+                jsonPath += L"\\marketeer";
+                jsonPath += L"\\marketeer.json";
                 DeleteFileW(jsonPath.c_str());
             }
         } else if (mCfgResetFlag == 2) {
@@ -470,30 +441,30 @@ public:
                 SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appDataPath);
                 GetModuleFileNameW((HMODULE)&__ImageBase, pathBuffer, MAX_PATH);
                 std::wstring globalPath = appDataPath;
-                globalPath += L"\\thprac";
+                globalPath += L"\\marketeer";
                 globalPath.push_back('\0');
                 globalPath.push_back('\0');
                 std::wstring localPath = GetDirFromFullPath(std::wstring(pathBuffer));
 
                 if (!gCfgIsLocalDir) {
-                    auto dest = localPath + L".thprac_data";
+                    auto dest = localPath + L".marketeer_data";
                     dest.push_back('\0');
                     dest.push_back('\0');
                     if (mCfgDirChgGlobalParam == 1 || mCfgDirChgGlobalParam == 2) {
                         FileOperateWrapper(FO_DELETE, dest.c_str(), nullptr);
                         FileOperateWrapper(mCfgDirChgGlobalParam == 1 ? FO_MOVE : FO_COPY, globalPath.c_str(), dest.c_str());
                     } else if (mCfgDirChgLocalParam == 1) {
-                        auto src = localPath + L".thprac_data_backup";
+                        auto src = localPath + L".marketeer_data_backup";
                         MoveFileW(src.c_str(), dest.c_str());
                     } else if (mCfgDirChgLocalParam == 0) {
                         CreateDirectoryW(dest.c_str(), NULL);
                     }
                 } else {
-                    auto src = localPath + L".thprac_data";
+                    auto src = localPath + L".marketeer_data";
                     src.push_back('\0');
                     src.push_back('\0');
                     if (mCfgDirChgLocalParam == 0) {
-                        auto dest = localPath + L".thprac_data_backup";
+                        auto dest = localPath + L".marketeer_data_backup";
                         MoveFileW(src.c_str(), dest.c_str());
                     } else if (mCfgDirChgLocalParam == 1 || mCfgDirChgLocalParam == 2) {
                         if (mCfgDirChgLocalParam == 1) {
@@ -668,216 +639,6 @@ private:
         }
     }
 
-    bool GuiGameTypeChkBox(const char* text, int idx)
-    {
-        bool result = ImGui::Checkbox(text, &(mGameTypeOpt[idx]));
-        if (result) {
-            if (!idx) {
-                for (auto& cfg : mThcrapCfg) {
-                    cfg.second = mGameTypeOpt[idx];
-                }
-            } else {
-                for (auto& game : mThcrapGames[idx]) {
-                    if (game.playerSelect) {
-                        game.selected = mGameTypeOpt[idx];
-                    }
-                }
-            }
-        }
-        return result;
-    }
-    void GuiThcrapBatchAddWnd()
-    {
-        if (ImGui::Button(XSTR(THPRAC_BACK))) {
-            mGuiUpdFunc = [&]() { GuiMain(); };
-        }
-        ImGui::SameLine();
-        GuiCenteredText(XSTR(THPRAC_THCRAP_ADDCFG_CHILD));
-        ImGui::Separator();
-
-        ImGui::BeginChild("BATCH_ADD");
-
-        bool itemChanged = false;
-        auto childHeight = std::max(ImGui::GetWindowHeight() * 0.37f, ImGui::GetFontSize() * 10.5f);
-
-        ImGui::Text(XSTR(THPRAC_THCRAP_ADDCFG_CONFIGS));
-        ImGui::BeginChild("BATCH_ADD_CFG", ImVec2(0, childHeight), true);
-        ImGui::Columns(3, 0, false);
-        bool allCfgSelected = true;
-        for (auto& cfg : mThcrapCfg) {
-            auto txtSize = ImGui::CalcTextSize(cfg.first.c_str());
-            itemChanged |= ImGui::Checkbox(cfg.first.c_str(), &cfg.second);
-            if (ImGui::IsItemHovered() && txtSize.x > ImGui::GetWindowWidth() * 0.3f) {
-                ImGui::BeginTooltip();
-                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-                ImGui::TextUnformatted(cfg.first.c_str());
-                ImGui::PopTextWrapPos();
-                ImGui::EndTooltip();
-            }
-            if (!cfg.second) {
-                allCfgSelected = false;
-            }
-            mGameTypeOpt[0] = allCfgSelected;
-            ImGui::NextColumn();
-        }
-        ImGui::Columns(1);
-        ImGui::EndChild();
-
-        ImGui::Text(XSTR(THPRAC_THCRAP_ADDCFG_GAMES));
-        ImGui::BeginChild("BATCH_ADD_GAMES", ImVec2(0, childHeight), true);
-        int i = 0;
-        for (auto& gameType : mThcrapGames) {
-            if (i) {
-                bool allSelected = true;
-                bool allUnavailable = true;
-                ImGui::Columns(i == 1 ? 7 : 6, 0, false);
-                for (auto& game : gameType) {
-                    if (game.playerSelect) {
-                        allUnavailable = false;
-                        itemChanged |= ImGui::Checkbox(game.name, &game.selected);
-                        if (!game.selected) {
-                            allSelected = false;
-                        }
-                    } else {
-                        ImGui::BeginDisabled();
-                        ImGui::Checkbox(game.name, &game.selected);
-                        ImGui::EndDisabled();
-                    }
-                    mGameTypeOpt[i] = allSelected;
-                    ImGui::NextColumn();
-                }
-                if (allUnavailable) {
-                    mGameTypeOpt[i] = false;
-                }
-                ImGui::Columns(1);
-                if (i != 3) {
-                    ImGui::NewLine();
-                }
-            }
-            ++i;
-        }
-        ImGui::EndChild();
-        ImGui::Indent(ImGui::GetStyle().ItemSpacing.x);
-        itemChanged |= GuiGameTypeChkBox(XSTR(THPRAC_THCRAP_ADDCFG_ALLCFG), 0);
-        ImGui::SameLine();
-        itemChanged |= GuiGameTypeChkBox(XSTR(THPRAC_GAMES_MAIN_SERIES), 1);
-        ImGui::SameLine();
-        itemChanged |= GuiGameTypeChkBox(XSTR(THPRAC_GAMES_SPINOFF_STG), 2);
-        ImGui::SameLine();
-        itemChanged |= GuiGameTypeChkBox(XSTR(THPRAC_GAMES_SPINOFF_OTHERS), 3);
-        ImGui::Unindent(ImGui::GetStyle().ItemSpacing.x);
-
-        if (itemChanged) {
-            mThcrapAddPromptTime = 0.0f;
-        }
-        if (mThcrapAddPromptTime > 0.0f) {
-            ImGui::PushStyleColor(ImGuiCol_Button, mThcrapAddPromptCol);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, mThcrapAddPromptCol);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, mThcrapAddPromptCol);
-            mThcrapAddPromptTime -= ImGui::GetIO().DeltaTime;
-            GuiCornerButton(mThcrapAddPrompt.c_str(), nullptr, ImVec2(1.0f, 0.0f), true);
-            ImGui::PopStyleColor();
-            ImGui::PopStyleColor();
-            ImGui::PopStyleColor();
-        } else {
-            auto retnValue = GuiCornerButton(XSTR(THPRAC_APPLY), nullptr, ImVec2(1.0f, 0.0f), true);
-            if (retnValue == 1) {
-                size_t cfgSize = 0;
-                size_t gameSize = 0;
-                for (auto& cfg : mThcrapCfg) {
-                    if (cfg.second) {
-                        cfgSize++;
-                        for (auto& gameType : mThcrapGames) {
-                            for (auto& game : gameType) {
-                                if (game.playerSelect && game.selected) {
-                                    gameSize++;
-                                    LauncherGamesThcrapAdd(game.name, cfg.first, mCfgThpracDefault.Get());
-                                }
-                            }
-                        }
-                    }
-                }
-                LauncherGamesThcrapAdd("", std::string(), false, true);
-                mThcrapAddPromptTime = 2.0f;
-                if (!cfgSize) {
-                    mThcrapAddPrompt = XSTR(THPRAC_THCRAP_ADDCFG_NOCFG);
-                    mThcrapAddPromptCol = { 0.8f, 0.0f, 0.0f, 1.0f };
-                } else if (!gameSize) {
-                    mThcrapAddPrompt = XSTR(THPRAC_THCRAP_ADDCFG_NOGAME);
-                    mThcrapAddPromptCol = { 0.8f, 0.0f, 0.0f, 1.0f };
-                } else {
-                    mThcrapAddPrompt = XSTR(THPRAC_THCRAP_ADDCFG_SUCCESS);
-                    mThcrapAddPromptCol = { 0.0f, 0.75f, 0.0f, 1.0f };
-                }
-            } 
-        }
-        
-
-        ImGui::EndChild();
-    }
-    void GuiThcrapSettings()
-    {
-        ImGui::Text(XSTR(THPRAC_THCRAP));
-        ImGui::Separator();
-        if (mThcrap.Get() == "") {
-            ImGui::Text(XSTR(THPRAC_THCRAP_NOTYET));
-            if (ImGui::Button("Get thcrap")) {
-                ShellExecuteW(NULL, L"open", L"https://www.thpatch.net/", NULL, NULL, SW_SHOW);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(XSTR(THPRAC_THCRAP_SET))) {
-                auto path = LauncherWndFolderSelect();
-                if (path != L"") {
-                    if (!LauncherGamesThcrapTest(path)) {
-                        mThcrapHintTimeBuffer = 2;
-                        mThcrapHintTime = 5.0f;
-                        mThcrapHintStr = XSTR(THPRAC_THCRAP_INVALID);
-                    } else {
-                        mThcrap.Set(utf16_to_utf8(path));
-                        LauncherGamesThcrapSetup();
-                        mThcrapHintTime = 0.0f;
-                        //mThcrapHintTimeBuffer = 2;
-                        //mThcrapHintTime = 15.0f;
-                        //mThcrapHintStr = "Hint: Use the \"Batch add\" button to add thcrap configs to your game lists.";
-                    }
-                }
-            }
-        } else {
-            ImGui::Text(XSTR(THPRAC_THCRAP_LOCATION), mThcrap.Get().c_str());
-            if (GuiButtonAndModalYesNo(XSTR(THPRAC_THCRAP_UNSET), XSTR(THPRAC_THCRAP_UNSET_MODAL), XSTR(THPRAC_THCRAP_UNSET_TXT), -1.0f, XSTR(THPRAC_YES), XSTR(THPRAC_NO))) {
-                mThcrap.Set(std::string(""));
-                mThcrapHintTime = 0.0f;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(XSTR(THPRAC_THCRAP_ADDCFG))) {
-                LauncherGamesThcrapSetup();
-                LauncherGamesThcrapCfgGet(mThcrapCfg, mThcrapGames);
-                if (mThcrapCfg.size()) {
-                    mGuiUpdFunc = [&]() { GuiThcrapBatchAddWnd(); };
-                } else {
-                    mThcrapHintTimeBuffer = 2;
-                    mThcrapHintTime = 5.0f;
-                    mThcrapHintStr = XSTR(THPRAC_THCRAP_ADDCFG_404);
-                }
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(XSTR(THPRAC_THCRAP_LAUNCH_CONFIGURE))) {
-                if (!LauncherGamesThcrapLaunch()) {
-                    mThcrapHintTimeBuffer = 2;
-                    mThcrapHintTime = 5.0f;
-                    mThcrapHintStr = XSTR(THPRAC_THCRAP_LAUNCH_FAILED);
-                }
-            }
-        }
-        if (mThcrapHintTimeBuffer) {
-            mThcrapHintTimeBuffer--;
-        } else if (mThcrapHintTime > 0.0f) {
-            mThcrapHintTime -= ImGui::GetIO().DeltaTime;
-            ImGui::SameLine();
-            ImGui::Text(mThcrapHintStr.c_str());
-        }
-    }
-
     void TextLink(const char* text, const wchar_t* link)
     {
         ImGui::Text(text);
@@ -905,26 +666,12 @@ private:
         ImGui::Text(XSTR(THPRAC_LAUNCH_BEHAVIOR));
         ImGui::Separator();
         mAdminRights.Gui(XSTR(THPRAC_ADMIN_RIGHTS));
-        mExistingGameAction.Gui(XSTR(THPRAC_EXISTING_GAME_ACTION), XSTR(THPRAC_EXISTING_GAME_ACTION_OPTION));
-        mDontSearchOngoingGame.Gui(XSTR(THPRAC_DONT_SEARCH_ONGOING));
-        ImGui::BeginDisabled();
-        mReflectiveLaunch.Gui(XSTR(THPRAC_REFLECTIVE_LAUNCH));
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        GuiHelpMarker(XSTR(THPRAC_REFLECTIVE_LAUNCH_DESC));
-        ImGui::NewLine();
 
         ImGui::Text(XSTR(THPRAC_SETTING_LAUNCHER));
         ImGui::Separator();
-        //mCfgAlwaysOpen.Gui(XSTR(THPRAC_ALWAYS_OPEN_LAUNCHER), XSTR(THPRAC_ALWAYS_OPEN_LAUNCHER_DESC));
         mCfgAfterLaunch.Gui(XSTR(THPRAC_AFTER_LAUNCH), XSTR(THPRAC_AFTER_LAUNCH_OPTION));
-        mAutoDefLaunch.Gui(XSTR(THPRAC_AUTO_DEFAULT_LAUNCH), XSTR(THPRAC_AUTO_DEFAULT_LAUNCH_DESC));
-        mCfgThpracDefault.Gui(XSTR(THPRAC_APPLY_THPRAC_DEFAULT), XSTR(THPRAC_APPLY_THPRAC_DEFAULT_OPTION));
         mCfgFilterDefault.Gui(XSTR(THPRAC_FILTER_DEFAULT), XSTR(THPRAC_FILTER_DEFAULT_OPTION), XSTR(THPRAC_FILTER_DEFAULT_DESC));
         PathAndDirSettings();
-        ImGui::NewLine();
-
-        GuiThcrapSettings();
         ImGui::NewLine();
 
         ImGui::Text(XSTR(THPRAC_GAME_ADJUSTMENTS));
@@ -947,47 +694,23 @@ private:
         if (ImGui::Button(XSTR(TH_ABOUT_SHOW_LICENCE))) {
             mGuiUpdFunc = [&]() { GuiLicenceWnd(); };
         }
-        ImGui::NewLine();
-        ImGui::Text(XSTR(TH_ABOUT_AUTHOR));
-        ImGui::Text(XSTR(TH_ABOUT_CONTACT));
-        TextLink("github: ack7139(https://github.com/ack7139)", L"https://github.com/ack7139");
-        if (Gui::LocaleGet() == Gui::LOCALE_ZH_CN) {
-            TextLink("bilibili: Ap3r7ur3(https://space.bilibili.com/9453074)", L"https://space.bilibili.com/9453074");
-        }
-        TextLink("Twitter: @ack7139", L"https://twitter.com/ack7139");
-        ImGui::NewLine();
-        ImGui::Text(XSTR(TH_ABOUT_THANKS), "You!");
     }
 
     THCfgCombo mCfgLanguage { "language", 0, 3 };
     THCfgCheckbox mCfgAlwaysOpen { "always_open_launcher", false };
     THCfgCombo mCfgAfterLaunch { "after_launch", 0, 3 };
-    THCfgCheckbox mAutoDefLaunch { "auto_default_launch", false };
-    THCfgCombo mCfgThpracDefault { "apply_thprac_default", 0, 3 };
     THCfgCombo mCfgFilterDefault { "filter_default", 0, 3 };
     THSetting<bool> mUseRelativePath { "use_relative_path", false };
-    THSetting<std::string> mThcrap { "thcrap", "" };
     THCfgCheckbox mCfgUnlockRefreshRate { "unlock_refresh_rate", false };
     THCfgCheckbox mCfgCheckUpdate { "check_update", true };
 
-    THCfgCheckbox mReflectiveLaunch { "reflective_launch", false };
-    THCfgCombo mExistingGameAction { "existing_game_launch_action", 0, 3 };
-    THCfgCheckbox mDontSearchOngoingGame { "dont_search_ongoing_game", false };
     THCfgCheckbox mAdminRights { "thprac_admin_rights", false };
     THCfgCombo mCheckUpdateTiming { "check_update_timing", 0, 3 };
     THCfgCheckbox mUpdateWithoutConfirm { "update_without_confirmation", false };
     THCfgCombo mFilenameAfterUpdate { "filename_after_update", 0, 3 };
     int mOriginalLanguage;
 
-    std::string mThcrapHintStr;
-    float mThcrapHintTime = 0.0f;
-    int mThcrapHintTimeBuffer = false;
-    std::string mThcrapAddPrompt;
-    float mThcrapAddPromptTime = 0.0f;
-    ImVec4 mThcrapAddPromptCol;
-    std::vector<GameRoll> mThcrapGames[4];
     bool mGameTypeOpt[4];
-    std::vector<std::pair<std::string, bool>> mThcrapCfg;
 
     unsigned int mCfgResetFlag = 0;
     int mCfgUseLocalDir = 0;
@@ -997,6 +720,11 @@ private:
 
     std::function<void(void)> mGuiUpdFunc = []() {};
 };
+
+void LauncherCfgGuiUpd()
+{
+    THCfgGui::singleton().GuiUpdate();
+}
 
 void LauncherCfgReset()
 {
@@ -1037,57 +765,6 @@ bool CheckMutexLoop(const wchar_t* mutex_name, size_t timeout = 0)
             return false;
         }
     }
-}
-bool LauncherPreUpdate(wchar_t* pCmdLine)
-{
-    std::wstring cmd = pCmdLine;
-    int stage = 0;
-    if (cmd.find(L"--update-launcher-1 ") == 0) {
-        stage = 1;
-        cmd = cmd.substr(20);
-    } else if (cmd.find(L"--update-launcher-2 ") == 0) {
-        stage = 2;
-        cmd = cmd.substr(20);
-    } else if (cmd.find(L"--update-launcher ") == 0) {
-        stage = 3;
-        cmd = cmd.substr(18);
-    }
-
-    if (stage) {
-        DeleteFileLoop(cmd.c_str(), 20000);
-
-        if (stage == 1) {
-            wchar_t* exePathCstr;
-            _get_wpgmptr(&exePathCstr);
-
-            std::wstring finalDir = GetDirFromFullPath(cmd);
-            std::wstring finalPath;
-            int filenameAfterUpdate = 0;
-            if (LauncherCfgInit(true)) {
-                LauncherSettingGet("filename_after_update", filenameAfterUpdate);
-                LauncherCfgClose();
-            }
-            switch (filenameAfterUpdate) {
-            case 1:
-                finalPath = cmd;
-                break;
-            case 2:
-                finalPath = GetDirFromFullPath(cmd) + L"thprac.exe";
-                break;
-            default:
-                finalPath = GetDirFromFullPath(cmd) + GetNameFromFullPath(std::wstring(exePathCstr));
-                break;
-            }
-
-            CopyFile(exePathCstr, finalPath.c_str(), FALSE);
-            ShellExecuteW(NULL, NULL, finalPath.c_str(),
-                (std::wstring(L"--update-launcher-2 ") + exePathCstr).c_str(), finalDir.c_str(), SW_SHOW);
-
-            return true;
-        } 
-    }
-
-    return false;
 }
 
 }

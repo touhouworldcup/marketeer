@@ -21,6 +21,5 @@ void LauncherSettingSet(const char* name, bool& valueIn);
 void LauncherSettingSet(const char* name, float& valueIn);
 void LauncherSettingSet(const char* name, std::string& valueIn);
 
-bool LauncherPreUpdate(wchar_t* pCmdLine);
-
+void LauncherCfgGuiUpd();
 }

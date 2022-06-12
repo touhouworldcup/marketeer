@@ -15,10 +15,5 @@ bool GetExeInfoEx(size_t process, ExeSig& exeSigOut);
 bool LauncherGamesGuiUpd();
 void LauncherGamesGuiSwitch(const char* idStr);
 void LauncherGamesForceReload();
-bool LauncherGamesThcrapTest(std::wstring& dir);
-bool LauncherGamesThcrapSetup();
-void LauncherGamesThcrapCfgGet(std::vector<std::pair<std::string, bool>>& cfgVec, std::vector<GameRoll> gameVec[4]);
-void LauncherGamesThcrapAdd(const char* gameId, std::string& cfg, bool use_thprac, bool flush = false);
-bool LauncherGamesThcrapLaunch();
 void* LauncherGamesExternalLaunch(const char* game, std::string ctx, int type = TYPE_ORIGINAL);
 }

@@ -198,62 +198,6 @@ bool CheckIsValidJson(std::wstring& jsonPath)
 
     return false;
 }
-int CheckHasSteamDRM(void* exeBuffer, size_t exeSize)
-{
-    if (exeSize < 128)
-        return 0;
-
-    IMAGE_DOS_HEADER dosHeader;
-    if (!ReadMemory(&dosHeader, exeBuffer, sizeof(IMAGE_DOS_HEADER)) || dosHeader.e_magic != 0x5a4d)
-        return 0;
-    IMAGE_NT_HEADERS ntHeader;
-    if (!ReadMemory(&ntHeader, (void*)((DWORD)exeBuffer + dosHeader.e_lfanew), sizeof(IMAGE_NT_HEADERS)) || ntHeader.Signature != 0x00004550)
-        return 0;
-
-    PIMAGE_SECTION_HEADER pSection = (PIMAGE_SECTION_HEADER)((ULONG_PTR)((LONG)exeBuffer + dosHeader.e_lfanew) + ((LONG)(LONG_PTR) & (((IMAGE_NT_HEADERS*)0)->OptionalHeader)) + ntHeader.FileHeader.SizeOfOptionalHeader);
-    for (int i = 0; i < ntHeader.FileHeader.NumberOfSections; i++, pSection++) {
-        IMAGE_SECTION_HEADER section;
-        if (!ReadMemory(&section, pSection, sizeof(IMAGE_SECTION_HEADER)))
-            continue;
-        if (!strcmp(".bind", (char*)section.Name)) {
-            static std::string_view ver2_0Sig("\x53\x51\x52\x56\x57\x55\x8B\xEC\x81\xEC\x00\x10\x00\x00\xBE", 15);
-            static std::string_view ver2_1Sig("\x53\x51\x52\x56\x57\x55\x8B\xEC\x81\xEC\x00\x10\x00\x00\xC7", 15);
-            static std::string_view ver3Sig("\xE8\x00\x00\x00\x00\x50\x53\x51\x52\x56\x57\x55\x8B\x44\x24\x1C\x2D\x05\x00\x00\x00\x8B\xCC\x83\xE4\xF0\x51\x51\x51\x50", 30);
-            static std::string_view ver3PatternHead("\x55\x8B\xEC\x81\xEC", 5);
-            static std::string_view ver3Sub1_1("\x53", 1);
-            static std::string_view ver3Sub1_2("\x68", 1);
-            static std::string_view ver3Sub2_1("\x53", 1);
-            static std::string_view ver3Sub2_2("\x8D\x83", 2);
-            static std::string_view ver3Sub3_1("\x56", 1);
-            static std::string_view ver3Sub3_2("\x8D", 1);
-            std::string_view exeStr((char*)exeBuffer, exeSize);
-
-            //auto sectionOffset = (DWORD)exeBuffer + section.PointerToRawData;
-            if (exeStr.find(ver2_0Sig, section.PointerToRawData) != std::string_view::npos) {
-                return 2;
-            } else if (exeStr.find(ver2_0Sig, section.PointerToRawData) != std::string_view::npos) {
-                return 2;
-            } else if (exeStr.find(ver3Sig, section.PointerToRawData) != std::string_view::npos) {
-                auto pos = exeStr.find(ver3PatternHead, section.PointerToRawData);
-                uint32_t headerSize = 0;
-                if (pos != std::string_view::npos) {
-                    if (exeStr.find(ver3Sub1_1, pos) == pos + 9 && exeStr.find(ver3Sub1_2, pos) == pos + 15) {
-                        headerSize = *(uint32_t*)((uint32_t)exeBuffer + pos + 0x10);
-                    } else if (exeStr.find(ver3Sub2_1, pos) == pos + 9 && exeStr.find(ver3Sub2_2, pos) == pos + 15) {
-                        headerSize = *(uint32_t*)((uint32_t)exeBuffer + pos + 0x16);
-                    } else if (exeStr.find(ver3Sub3_1, pos) == pos + 9 && exeStr.find(ver3Sub3_2, pos) == pos + 20) {
-                        headerSize = *(uint32_t*)((uint32_t)exeBuffer + pos + 0x10);
-                    }
-                }
-                if (headerSize == 0xb0 || headerSize == 0xd0 || headerSize == 0xf0) {
-                    return 3;
-                }
-            }
-        }
-    }
-
-    return 0;
-}
 
 struct THGameInst {
     std::string name;
@@ -438,228 +382,11 @@ private:
             mGames[gameDef.idStr].signature = gameDef;
         }
         LoadGameCfg();
-        thcrapSetup();
         mGuiUpdFunc = [&]() { GuiMain(); };
     }
     SINGLETON(THGameGui);
 
 public:
-    static HINSTANCE WINAPI thcrapLaunchGame(std::wstring& cfg, const char* game, const char* append = nullptr)
-    {
-        wchar_t thcrapDir[MAX_PATH];
-        wchar_t thcrapArg[MAX_PATH];
-
-        swprintf_s(thcrapDir, L"%s\\%s", THGameGui::singleton().mThcrapDir.c_str(), L"thcrap_loader.exe");
-        swprintf_s(thcrapArg, L"\"%s\" %s%s", cfg.c_str(), utf8_to_utf16(game).c_str(), append ? utf8_to_utf16(append).c_str() : L"");
-        return ShellExecuteW(NULL, L"open", thcrapDir, thcrapArg, THGameGui::singleton().mThcrapDir.c_str(), SW_SHOW);
-    }
-    void thcrapPathConversion()
-    {
-        wchar_t currentPath[MAX_PATH];
-        wchar_t cvt[MAX_PATH];
-        bool isRelative = false;
-        LauncherSettingGet("use_relative_path", isRelative);
-        GetModuleFileNameW(GetModuleHandleW(NULL), currentPath, MAX_PATH);
-
-        if (isRelative) {
-            if (!PathIsRelativeW(mThcrapDir.c_str())) {
-                if (PathRelativePathToW(cvt, currentPath, FILE_ATTRIBUTE_DIRECTORY, mThcrapDir.c_str(), FILE_ATTRIBUTE_NORMAL)) {
-                    mThcrapDir = cvt;
-                    LauncherSettingSet("thcrap", utf16_to_utf8(mThcrapDir));
-                }
-            }
-        } else {
-            if (PathIsRelativeW(mThcrapDir.c_str())) {
-                if (GetFullPathNameW(mThcrapDir.c_str(), MAX_PATH, cvt, NULL)) {
-                    mThcrapDir = cvt;
-                    LauncherSettingSet("thcrap", utf16_to_utf8(mThcrapDir));
-                }
-            }
-        }
-    }
-    bool thcrapLaunch()
-    {
-        auto configure = mThcrapDir + L"\\thcrap_configure.exe";
-        if (ShellExecuteW(NULL, L"open", configure.c_str(), NULL, mThcrapDir.c_str(), SW_SHOW) > (HINSTANCE)32) {
-            return true;
-        }
-        return false;
-    }
-    void thcrapAdd(const char* gameId, std::string& cfg, bool use_thprac, bool flush = false)
-    {
-        if (flush) {
-            WriteGameCfg();
-            return;
-        }
-
-        bool repeated = false;
-        for (auto& game : mGames[gameId].instances) {
-            if (game.path == cfg) {
-                repeated = true;
-                break;
-            }
-        }
-
-        if (!repeated) {
-            THGameInst inst;
-
-            char nameStr[256];
-            std::string subname = cfg;
-            if (IfEndWith(subname, ".js")) {
-                for (auto& c : subname) {
-                    c = tolower(c);
-                }
-                subname = subname.substr(0, subname.rfind(".js"));
-            }
-            sprintf_s(nameStr, "%s (%s)", gameId, subname.c_str());
-            
-            inst.name = nameStr;
-            inst.path = cfg;
-            inst.type = TYPE_THCRAP;
-            inst.useTHPrac = use_thprac == 1 ? IsTHPracApplicable(TYPE_THCRAP) : false;
-            mGames[gameId].instances.push_back(inst);
-        }
-    }
-    void thcrapCfgGet(std::vector<std::pair<std::string, bool>>& cfgVec, std::vector<GameRoll> gameVec[4])
-    {
-        cfgVec.clear();
-        for (auto& cfg : mThcrapCfg) {
-            cfgVec.push_back(std::pair<std::string, bool>(cfg, false));
-        }
-        for (int i = 0; i < 4; i++) {
-            for (auto& game : gameVec[i]) {
-                game.playerSelect = nullptr;
-                game.selected = false;
-                for (auto& gameAvail : mThcrapGames) {
-                    if (gameAvail == game.name) {
-                        game.playerSelect = "GAME";
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    bool thcrapTest(std::wstring& dir)
-    {
-        auto loaderPath = dir + L"\\thcrap_loader.exe";
-        auto configurePath = dir + L"\\thcrap_configure.exe";
-        auto loaderAttr = GetFileAttributesW(loaderPath.c_str());
-        auto configureAttr = GetFileAttributesW(configurePath.c_str());
-
-        if (loaderAttr != INVALID_FILE_ATTRIBUTES && !(loaderAttr & FILE_ATTRIBUTE_DIRECTORY)) {
-            if (configureAttr != INVALID_FILE_ATTRIBUTES && !(loaderAttr & FILE_ATTRIBUTE_DIRECTORY)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-    bool thcrapChkCfgFolder(std::wstring& dir)
-    {
-        auto jsConfig = dir + L"\\config.js";
-        auto jsGames = dir + L"\\games.js";
-
-        if (!CheckIsValidJson(jsConfig) || !CheckIsValidJson(jsGames)) {
-            return false;
-        }
-
-        return true;
-    }
-    bool thcrapChkConfig(std::wstring& jsonPath)
-    {
-        void* jsBuffer;
-        size_t jsSize;
-        if (LoadJsonFile(jsonPath, jsBuffer, jsSize)) {
-            rapidjson::Document json;
-            if (!(json.Parse((const char*)jsBuffer, jsSize + 1).HasParseError()) && json.HasMember("patches") && json["patches"].IsArray() && json["patches"].Size()) {
-                bool isValid = true;
-                auto& patches = json["patches"];
-                for (auto patchIt = patches.Begin(); patchIt != patches.End(); ++patchIt) {
-                    if (!(*patchIt).IsObject()) {
-                        isValid = false;
-                        break;
-                    }
-                }
-                if (isValid) {
-                    free(jsBuffer);
-                    return true;
-                }
-            }
-            free(jsBuffer);
-        }
-        return false;
-    }
-    bool thcrapChkGames(std::wstring& cfgDir)
-    {
-        void* jsBuffer;
-        size_t jsSize;
-        auto gameCfgPath = cfgDir + L"\\games.js";
-        if (LoadJsonFile(gameCfgPath, jsBuffer, jsSize)) {
-            rapidjson::Document json;
-            if (!(json.Parse((const char*)jsBuffer, jsSize + 1).HasParseError()) && json.IsObject()) {
-                for (auto it = json.MemberBegin(); it != json.MemberEnd(); ++it) {
-                    if (it->value.IsString() && strcmp(it->value.GetString(), "")) {
-                        mThcrapGames.push_back(std::string(it->name.GetString()));
-                    }
-                }
-            }
-            free(jsBuffer);
-        }
-        return true;
-    }
-    bool thcrapSetup()
-    {
-        
-        mThcrapDir = L"";
-        mThcrapCfgDir = L"";
-        mThcrapCfg.clear();
-        mThcrapGames.clear();
-
-        std::string thcrapDirUtf8;
-        std::wstring thcrapDir;
-        LauncherSettingGet("thcrap", thcrapDirUtf8);
-        thcrapDir = utf8_to_utf16(thcrapDirUtf8);
-        if (!thcrapTest(thcrapDir)) {
-            LauncherSettingSet("thcrap", std::string(""));
-            return false;
-        }
-        mThcrapDir = thcrapDir;
-        thcrapPathConversion();
-
-        auto cfgDir = thcrapDir + L"\\config";
-        if (!thcrapChkCfgFolder(cfgDir)) {
-            cfgDir = thcrapDir;
-            if (!thcrapChkCfgFolder(cfgDir)) {
-                return true;
-            }
-        }
-        mThcrapCfgDir = cfgDir;
-
-        std::wstring searchDir = cfgDir + L"\\*.js";
-        WIN32_FIND_DATAW findData;
-        HANDLE searchHnd = FindFirstFileW(searchDir.c_str(), &findData);
-        if (searchHnd == INVALID_HANDLE_VALUE) {
-            return true;
-        }
-        do {
-            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-                continue;
-            }
-            searchDir = cfgDir + L"\\" + std::wstring(findData.cFileName);
-
-            if (thcrapChkConfig(searchDir)) {
-                mThcrapCfg.push_back(utf16_to_utf8(findData.cFileName));
-            }
-
-        } while (FindNextFileW(searchHnd, &findData));
-        FindClose(searchHnd);
-
-        thcrapChkGames(cfgDir);
-
-
-        return true;
-    }
-
     void PathCoversion()
     {
         wchar_t currentPath[MAX_PATH];
@@ -698,7 +425,6 @@ public:
             mGames[gameDef.idStr].signature = gameDef;
         }
         LoadGameCfg();
-        thcrapSetup();
         PathCoversion();
         WriteGameCfg();
     }
@@ -1180,10 +906,6 @@ public:
                 ifSig = &gameSig;
                 ifType = TYPE_MODDED;
                 break;
-            } else if (type == TYPE_MALICIOUS) {
-                if (!CheckHasSteamDRM(pFileMapView, fileSize)) {
-                    ScanAddGame(type, name, utf8Dir, gameSig);
-                }
             } else if (type != TYPE_UNCERTAIN) {
                 ScanAddGame(type, name, utf8Dir, gameSig);
                 goto end;
@@ -1261,7 +983,6 @@ public:
     static DWORD WINAPI RescanThreadFunc(_In_ LPVOID lpParameter)
     {
         auto& gameGui = THGameGui::singleton();
-        gameGui.thcrapSetup();
         CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
         for (auto it = gameGui.mGames.begin(); it != gameGui.mGames.end(); ++it) {
@@ -1409,155 +1130,6 @@ public:
             GuiCenteredText(XSTR(THPRAC_SCAN_SCAN_FINISHED));
             if (GuiCornerButton(XSTR(THPRAC_NEXT))) {
                 GuiScanCheckMenuSwitch(0);
-            }
-        }
-    }
-    bool GuiGameTypeChkBox(const char* text, int idx)
-    {
-        bool result = ImGui::Checkbox(text, &(mSteamGameTypeOpt[idx]));
-        if (result) {
-            for (auto& game : mSteamGames[idx]) {
-                if (game.playerSelect) {
-                    game.selected = mSteamGameTypeOpt[idx];
-                }
-            }
-        }
-        return result;
-    }
-    void GuiScanSteam()
-    {
-        if (mSteamMenuStatus == 0) {
-            if (ImGui::Button(XSTR(THPRAC_BACK))) {
-                mGuiUpdFunc = [&]() { GuiMain(); };
-            }
-            ImGui::SameLine();
-            GuiCenteredText(XSTR(THPRAC_STEAM_MNG));
-            ImGui::Separator();
-
-            ImGui::TextWrapped(XSTR(THPRAC_STEAM_MNG_DESC));
-            ImGui::NewLine();
-            if (ImGui::Button(XSTR(THPRAC_STEAM_MNG_AUTO))) {
-                mScanOption[SCAN_OPT_STEAM] = true;
-                mScanThread.Start();
-                mScanStatus = 1;
-                mGuiUpdFunc = [&]() { GuiScanFolder(); };
-            }
-            ImGui::SameLine();
-            ImGui::Text(XSTR(THPRAC_STEAM_MNG_OR));
-            ImGui::SameLine();
-            if (ImGui::Button(XSTR(THPRAC_STEAM_MNG_MANUAL))) {
-                for (auto& games : mSteamGames) {
-                    games.clear();
-                }
-                for (auto& game : gGameDefs) {
-                    auto gameType = (GameRollType)((int)game.catagory + 1);
-                    GameRoll roll { game.idStr, gameType, game.steamId ? "STEAM": nullptr, 1, false };
-
-                    auto it = mGames.find(std::string(roll.name));
-                    if (it != mGames.end()) {
-                        auto& existingGames = it.value();
-                        for (auto& existingGame : existingGames.instances) {
-                            if (existingGame.type == TYPE_STEAM) {
-                                roll.selected = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    mSteamGames[gameType].push_back(roll);
-                }
-                mSteamMenuStatus = 1;
-            }
-        } else if (mSteamMenuStatus == 1) {
-            if (ImGui::Button(XSTR(THPRAC_BACK))) {
-                mSteamMenuStatus = 0;
-            }
-            ImGui::SameLine();
-            GuiCenteredText(XSTR(THPRAC_STEAM_MNG_MANUAL_TITLE));
-            ImGui::Separator();
-
-            ImGui::TextWrapped(XSTR(THPRAC_STEAM_MNG_MANUAL_INSTRUCTION));
-            ImGui::NewLine();
-
-            int i = 0;
-            for (auto& gameType : mSteamGames) {
-                if (i) {
-                    bool allSelected = true;
-                    bool allUnavailable = true;
-                    ImGui::Columns(i == 1 ? 7 : 6, 0, false);
-                    for (auto& game : gameType) {
-                        if (game.playerSelect) {
-                            allUnavailable = false;
-                            ImGui::Checkbox(game.name, &game.selected);
-                            if (!game.selected) {
-                                allSelected = false;
-                            }
-                        } else {
-                            ImGui::BeginDisabled();
-                            ImGui::Checkbox(game.name, &game.selected);
-                            ImGui::EndDisabled();
-                        }
-                        mSteamGameTypeOpt[i] = allSelected;
-                        ImGui::NextColumn();
-                    }
-                    if (allUnavailable) {
-                        mSteamGameTypeOpt[i] = false;
-                    }
-                    ImGui::Columns(1);
-                    if (i != 3) {
-                        ImGui::NewLine();
-                    }
-                }
-                ++i;
-            }
-            ImGui::NewLine();
-            ImGui::Indent(ImGui::GetStyle().ItemSpacing.x);
-            GuiGameTypeChkBox(XSTR(THPRAC_GAMES_MAIN_SERIES), 1);
-            ImGui::SameLine();
-            GuiGameTypeChkBox(XSTR(THPRAC_GAMES_SPINOFF_STG), 2);
-            ImGui::SameLine();
-            GuiGameTypeChkBox(XSTR(THPRAC_GAMES_SPINOFF_OTHERS), 3);
-            ImGui::Unindent(ImGui::GetStyle().ItemSpacing.x);
-
-            if (GuiCornerButton(XSTR(THPRAC_APPLY))) {
-                for (auto& steamGames : mSteamGames) {
-                    for (auto& steamGame : steamGames) {
-                        auto it = mGames.find(std::string(steamGame.name));
-                        if (it != mGames.end()) {
-                            bool hasSteamGame = false;
-                            auto& existingGames = it.value().instances;
-                            for (auto gameIt = existingGames.begin();
-                                gameIt != existingGames.end();
-                                ++gameIt) {
-                                if ((*gameIt).type == TYPE_STEAM) {
-                                    hasSteamGame = true;
-                                    if (!steamGame.selected) {
-                                        it.value().selected = 0;
-                                        existingGames.erase(gameIt);
-                                    }
-                                    break;
-                                }
-                            }
-                            if (!hasSteamGame && steamGame.selected) {
-                                std::string gameName = steamGame.name;
-                                gameName += " (Steam)";
-                                mGameScan[3].emplace_back(gameName.c_str(), "", TYPE_STEAM, &(it.value().signature));
-                            }
-                        }
-                    }
-                }
-                
-                FinalizeGameScan();
-                WriteGameCfg();
-                mSteamMenuStatus = 2;
-            }
-        } else if (mSteamMenuStatus == 2) {
-            GuiCenteredText(XSTR(THPRAC_STEAM_MNG_MANUAL_TITLE));
-            ImGui::Separator();
-            GuiSetPosYRel(0.5f);
-            GuiCenteredText(XSTR(THPRAC_STEAM_MNG_MANUAL_COMPLETE));
-             if (GuiCornerButton(XSTR(THPRAC_FINISH))) {
-                mGuiUpdFunc = [&]() { GuiMain(); };
             }
         }
     }
@@ -1937,22 +1509,6 @@ public:
             currentInstExePath = currentInstDir + utf8_to_utf16(currentGame->signature.idStr) + L".exe";
             currentInstExePath = GetUnifiedPath(currentInstExePath);
             break;
-        case TYPE_THCRAP:
-            executeResult = thcrapLaunchGame(currentInstPath, currentGame->signature.idStr);
-            currentInstExePath = L"";
-            break;
-        case TYPE_STEAM: {
-            if (!currentGame->signature.steamId) {
-                return 0;
-            }
-            std::wstring steamURL = L"steam://rungameid/";
-            steamURL += currentGame->signature.steamId;
-            ShellExecuteW(NULL, L"open", L"steam://open/games", NULL, NULL, SW_SHOW);
-            ShellExecuteW(NULL, L"open", steamURL.c_str(), NULL, NULL, SW_SHOW);
-            currentInstExePath = GetUnifiedPath(currentInstExePath);
-            executeResult = (HINSTANCE)64;
-        }   
-            break;
         default:
             executeResult = ShellExecuteW(NULL, L"open", currentInstPath.c_str(), NULL, currentInstDir.c_str(), SW_SHOW);
             break;
@@ -1980,11 +1536,9 @@ public:
         switch (type) {
         case THPrac::TYPE_ORIGINAL:
         //case THPrac::TYPE_MODDED:
-        case THPrac::TYPE_THCRAP:
         //case THPrac::TYPE_SCHINESE:
         //case THPrac::TYPE_TCHINESE:
         case THPrac::TYPE_NYASAMA:
-        case THPrac::TYPE_STEAM:
             return true;
         default:
             return false;
@@ -2036,13 +1590,6 @@ public:
                 return true;
             break;
             // TODO: Launch steam
-        case TYPE_THCRAP: {
-            if ((int)thcrapLaunchGame(dirU16, idStr, "_custom") > 32) {
-                return true;
-            }
-        } break;
-        default:
-            break;
         }
 
         return false;
@@ -2372,10 +1919,6 @@ public:
             ScanClear();
             mGuiUpdFunc = [&]() { GuiScanFolder(); };
         }
-        if (ImGui::Selectable(XSTR(THPRAC_STEAM_MNG_BUTTON))) {
-            ScanClear();
-            mGuiUpdFunc = [&]() { GuiScanSteam(); };
-        }
         ImGui::Separator();
         if (ImGui::Selectable(XSTR(THPRAC_GAMES_RESCAN))) {
             mNeedRescan = true;
@@ -2406,15 +1949,21 @@ public:
 
         return result;
     }
-    void GameTable(const char* title, THGameCatagory catagory)
-    {
-        int columns = 1;
-        int i = 0;
 
-        ImGui::Text(title);
-        ImGui::Columns(columns);
-        for (auto& gameRef : gGameDefs) {
-            if (gameRef.catagory == catagory) {
+    void GuiMain()
+    {
+        mCurrentGame = nullptr;
+        mCustomErrTxtTime = 0.0f;
+        mNeedRescan = false;
+
+        GuiMainCtxMenu(0);
+
+        {
+            int columns = 1;
+            int i = 0;
+
+            ImGui::Columns(columns);
+            for (auto& gameRef : gGameDefs) {
                 auto& game = mGames[gameRef.idStr];
                 if (!(i % columns)) {
                     ImGui::Separator();
@@ -2462,23 +2011,9 @@ public:
                 ImGui::NextColumn();
                 i++;
             }
+            ImGui::Columns(1);
+            ImGui::Separator();
         }
-        ImGui::Columns(1);
-        ImGui::Separator();
-    }
-    void GuiMain()
-    {
-        mCurrentGame = nullptr;
-        mCustomErrTxtTime = 0.0f;
-        mNeedRescan = false;
-
-        GuiMainCtxMenu(0);
-
-        GameTable(XSTR(THPRAC_GAMES_MAIN_SERIES), CAT_MAIN);
-        ImGui::NewLine();
-        GameTable(XSTR(THPRAC_GAMES_SPINOFF_STG), CAT_SPINOFF_STG);
-        ImGui::NewLine();
-        GameTable(XSTR(THPRAC_GAMES_SPINOFF_OTHERS), CAT_SPINOFF_OTHERS);
 
         if (mNeedRescan) {
             ImGui::OpenPopup("rescan##@__rescan");
@@ -2546,7 +2081,6 @@ private:
     std::string mScanCurrent[2];
     int mScanCurrentIdx = 0;
     int mSteamMenuStatus = 0;
-    std::vector<GameRoll> mSteamGames[4];
     bool mSteamGameTypeOpt[4];
 };
 
@@ -2564,31 +2098,6 @@ void LauncherGamesGuiSwitch(const char* idStr)
 void LauncherGamesForceReload()
 {
     THGameGui::singleton().ForceReload();
-}
-
-bool LauncherGamesThcrapTest(std::wstring& dir)
-{
-    return THGameGui::singleton().thcrapTest(dir);
-}
-
-bool LauncherGamesThcrapSetup()
-{
-    return THGameGui::singleton().thcrapSetup();
-}
-
-void LauncherGamesThcrapCfgGet(std::vector<std::pair<std::string, bool>>& cfgVec, std::vector<GameRoll> gameVec[4])
-{
-    THGameGui::singleton().thcrapCfgGet(cfgVec, gameVec);
-}
-
-void LauncherGamesThcrapAdd(const char* gameId, std::string& cfg, bool use_thprac, bool flush)
-{
-    THGameGui::singleton().thcrapAdd(gameId, cfg, use_thprac, flush);
-}
-
-bool LauncherGamesThcrapLaunch()
-{
-    return THGameGui::singleton().thcrapLaunch();
 }
 
 void* LauncherGamesExternalLaunch(const char* game, std::string ctx, int type)

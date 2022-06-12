@@ -35,24 +35,17 @@ bool PrivilegeCheck()
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
     HookCtx::VEHInit();
-    if (LauncherPreUpdate(pCmdLine)) {
-        return 0;
-    }
 
     auto thpracMutex = OpenMutexW(SYNCHRONIZE, FALSE, L"thprac - Touhou Practice Tool##mutex");
     RemoteInit();
     //SetCurrentDirectoryA("D:\\Touhou\\Games\\th18");
     //SetCurrentDirectoryA("D:\\Projects\\thprac\\Debug");
 
-    int launchBehavior = 0;
-    bool dontFindOngoingGame = false;
     bool adminRights = false;
     if (LauncherCfgInit(true)) {
         if (!Gui::LocaleInitFromCfg()) {
             Gui::LocaleAutoSet();
         }
-        LauncherSettingGet("existing_game_launch_action", launchBehavior);
-        LauncherSettingGet("dont_search_ongoing_game", dontFindOngoingGame);
         LauncherSettingGet("thprac_admin_rights", adminRights);
         LauncherCfgClose();
     }
@@ -62,14 +55,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         GetModuleFileNameA(NULL, exePath, MAX_PATH);
         CloseHandle(thpracMutex);
         ShellExecuteA(NULL, "runas", exePath, NULL, NULL, SW_SHOW);
-        return 0;
-    }
-
-    if (!dontFindOngoingGame && FindOngoingGame()) {
-        return 0;
-    }
-
-    if (launchBehavior != 1 && FindAndRunGame(launchBehavior == 2)) {
         return 0;
     }
 
